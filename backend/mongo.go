@@ -12,7 +12,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-type mongoStore struct{ collection *mongo.Collection }
+type mongoStore struct {
+	collection *mongo.Collection
+	client     *mongo.Client
+}
 
 func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, profileStore, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetServerSelectionTimeout(5 * time.Second))
@@ -64,7 +67,7 @@ func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, pro
 			return nil, nil, fmt.Errorf("create %s indexes: %w", name, err)
 		}
 	}
-	return client, mongoStore{collection: collection}, nil
+	return client, mongoStore{collection: collection, client: client}, nil
 }
 
 func (s mongoStore) List(ctx context.Context, interest, search string) ([]Profile, error) {
@@ -98,17 +101,13 @@ func (s mongoStore) ByID(ctx context.Context, id string) (Profile, error) {
 }
 
 func (s mongoStore) SeedDemo(ctx context.Context) error {
-	count, err := s.collection.CountDocuments(ctx, bson.D{})
-	if err != nil {
-		return err
+	for _, p := range profiles {
+		_, err := s.collection.UpdateOne(ctx, bson.D{{Key: "id", Value: p.ID}}, bson.D{{Key: "$setOnInsert", Value: p}}, options.UpdateOne().SetUpsert(true))
+		if err != nil {
+			return fmt.Errorf("seed demo profile %s: %w", p.ID, err)
+		}
 	}
-	if count != 0 {
-		return fmt.Errorf("refusing to seed nonempty profiles collection")
-	}
-	documents := make([]any, len(profiles))
-	for i, p := range profiles {
-		documents[i] = p
-	}
-	_, err = s.collection.InsertMany(ctx, documents)
-	return err
+	return nil
 }
+
+func (s mongoStore) Ping(ctx context.Context) error { return s.client.Ping(ctx, nil) }

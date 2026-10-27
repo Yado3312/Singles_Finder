@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -48,6 +49,14 @@ func jsonResponse(w http.ResponseWriter, status int, value any) {
 func routes(store profileStore) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if checker, ok := store.(interface{ Ping(context.Context) error }); ok {
+			if err := checker.Ping(ctx); err != nil {
+				jsonResponse(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+				return
+			}
+		}
 		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /api/profiles", func(w http.ResponseWriter, r *http.Request) {
@@ -91,38 +100,46 @@ func routes(store profileStore) http.Handler {
 }
 
 func main() {
-	addr := os.Getenv("ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:8080"
+	if err := loadEnvFile(); err != nil {
+		log.Fatal(err)
 	}
-	var store profileStore = demoStore{}
-	if uri := os.Getenv("MONGODB_URI"); uri != "" {
-		database := os.Getenv("MONGODB_DATABASE")
-		if database == "" {
-			database = "singlesfinder"
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		client, mongoProfiles, err := connectMongo(ctx, uri, database)
+	cfg, err := readConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var store profileStore
+	if cfg.DemoMode {
+		store = demoStore{}
+		log.Print("demo mode: fictional in-memory profiles")
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		client, mongoProfiles, err := connectMongo(ctx, cfg.MongoURI, cfg.Database)
 		cancel()
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer client.Disconnect(context.Background())
 		store = mongoProfiles
-		if os.Getenv("SEED_DEMO") == "true" {
-			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		if cfg.SeedDemo {
+			ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
 			err = mongoProfiles.(mongoStore).SeedDemo(ctx)
 			cancel()
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Print("inserted fictional demo profiles")
+			log.Print("fictional demo profiles seeded if missing")
 		}
-		log.Printf("using MongoDB database %s", database)
-	} else {
-		log.Print("MONGODB_URI is unset; using fictional in-memory profiles")
+		log.Printf("using MongoDB database %s", cfg.Database)
 	}
-	server := &http.Server{Addr: addr, Handler: routes(store), ReadHeaderTimeout: 5 * time.Second}
-	log.Printf("Go API listening on http://%s", addr)
+	handler := routes(store)
+	if cfg.WebDir != "" {
+		if info, err := os.Stat(filepath.Join(cfg.WebDir, "index.html")); err != nil || info.IsDir() {
+			log.Fatal("WEB_DIR must contain the Angular build index.html")
+		}
+		handler = withWeb(handler, cfg.WebDir)
+		log.Printf("serving Angular from %s", cfg.WebDir)
+	}
+	server := &http.Server{Addr: cfg.Addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	log.Printf("Go API listening on http://%s", cfg.Addr)
 	log.Fatal(server.ListenAndServe())
 }
