@@ -46,8 +46,9 @@ func jsonResponse(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func routes(store profileStore) http.Handler {
+func routes(store profileStore, accounts accountStore) http.Handler {
 	mux := http.NewServeMux()
+	registerAuthRoutes(mux, accounts)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 		defer cancel()
@@ -60,6 +61,9 @@ func routes(store profileStore) http.Handler {
 		jsonResponse(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /api/profiles", func(w http.ResponseWriter, r *http.Request) {
+		if !allowDiscoveryRequest(w, r, accounts) {
+			return
+		}
 		interest := strings.TrimSpace(r.URL.Query().Get("interest"))
 		search := strings.TrimSpace(r.URL.Query().Get("search"))
 		if len(interest) > 50 || len(search) > 100 {
@@ -77,6 +81,9 @@ func routes(store profileStore) http.Handler {
 		jsonResponse(w, http.StatusOK, matches)
 	})
 	mux.HandleFunc("GET /api/profiles/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if !allowDiscoveryRequest(w, r, accounts) {
+			return
+		}
 		id := strings.TrimSpace(r.PathValue("id"))
 		if id == "" || len(id) > 100 {
 			jsonResponse(w, http.StatusBadRequest, map[string]string{"error": "invalid profile id"})
@@ -108,6 +115,7 @@ func main() {
 		log.Fatal(err)
 	}
 	var store profileStore
+	var accounts accountStore
 	if cfg.DemoMode {
 		store = demoStore{}
 		log.Print("demo mode: fictional in-memory profiles")
@@ -120,9 +128,10 @@ func main() {
 		}
 		defer client.Disconnect(context.Background())
 		store = mongoProfiles
+		accounts = mongoProfiles
 		if cfg.SeedDemo {
 			ctx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
-			err = mongoProfiles.(mongoStore).SeedDemo(ctx)
+			err = mongoProfiles.SeedDemo(ctx)
 			cancel()
 			if err != nil {
 				log.Fatal(err)
@@ -131,7 +140,7 @@ func main() {
 		}
 		log.Printf("using MongoDB database %s", cfg.Database)
 	}
-	handler := routes(store)
+	handler := routes(store, accounts)
 	if cfg.WebDir != "" {
 		if info, err := os.Stat(filepath.Join(cfg.WebDir, "index.html")); err != nil || info.IsDir() {
 			log.Fatal("WEB_DIR must contain the Angular build index.html")

@@ -14,10 +14,11 @@ import (
 
 type mongoStore struct {
 	collection *mongo.Collection
+	database   *mongo.Database
 	client     *mongo.Client
 }
 
-func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, profileStore, error) {
+func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, *mongoStore, error) {
 	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetServerSelectionTimeout(5 * time.Second))
 	if err != nil {
 		return nil, nil, fmt.Errorf("connect to MongoDB: %w", err)
@@ -31,6 +32,10 @@ func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, pro
 	indexesByCollection := map[string][]mongo.IndexModel{
 		"accounts": {
 			{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+		},
+		"sessions": {
+			{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0)},
+			{Keys: bson.D{{Key: "accountId", Value: 1}}},
 		},
 		"profiles": {
 			{Keys: bson.D{{Key: "id", Value: 1}}, Options: options.Index().SetUnique(true)},
@@ -67,7 +72,7 @@ func connectMongo(ctx context.Context, uri, database string) (*mongo.Client, pro
 			return nil, nil, fmt.Errorf("create %s indexes: %w", name, err)
 		}
 	}
-	return client, mongoStore{collection: collection, client: client}, nil
+	return client, &mongoStore{collection: collection, database: db, client: client}, nil
 }
 
 func (s mongoStore) List(ctx context.Context, interest, search string) ([]Profile, error) {

@@ -64,12 +64,18 @@ Abre `http://localhost:4200`. Angular envía `/api` a Go mediante `proxy.conf.js
 ## Alcance actual
 
 - `GET /api/health`: comprueba la disponibilidad de Go y MongoDB.
-- `GET /api/profiles?interest=Coffee&search=Sofia`: lista y filtra perfiles.
-- `GET /api/profiles/{id}`: obtiene un perfil.
+- `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` y `GET /api/auth/me`: registro, inicio/cierre de sesión y consulta de cuenta.
+- `PUT /api/auth/quiz`: guarda intereses y preferencias del test inicial.
+- `PUT /api/auth/settings`: actualiza el nombre de la cuenta.
+- `GET /api/profiles?search=Sofia` y `GET /api/profiles/{id}`: consulta perfiles; con MongoDB requieren una sesión válida.
 - [ProfileApiService](src/profile-api.service.ts): acceso reutilizable desde Angular.
 - [Modelo de datos](docs/data-model.md): cuentas, perfiles, ubicaciones privadas, likes, matches, mensajes, bloqueos y reportes.
 
-**El backend todavía no tiene endpoints para crear cuentas, editar perfiles o enviar mensajes reales.** Solo inserta los perfiles ficticios cuando se habilita la siembra. Antes de admitir usuarios reales faltan autenticación, autorización, controles de edad, moderación y consultas que no revelen ubicaciones precisas.
+El registro valida que la persona sea mayor de 18 años. Las contraseñas se guardan con bcrypt; la sesión se entrega en una cookie `HttpOnly` y solo se conserva en MongoDB un hash de su token. Al entrar por primera vez, la persona debe completar el test de intereses y preferencias. La aplicación tiene únicamente las pestañas Mapa y Configuración.
+
+El mapa pide permiso de ubicación al navegador y usa las coordenadas solo en el dispositivo para centrar la vista; no las envía ni las guarda en la cuenta. Si se deniega el permiso, el mapa sigue disponible en la vista inicial. La ubicación exacta nunca se comparte con otros perfiles.
+
+`DEMO_MODE=true` conserva el modo de perfiles ficticios en memoria y **no habilita cuentas persistentes**. Para probar registro, test y sesión, usa MongoDB con `DEMO_MODE=false`. Likes persistentes, edición completa de perfil, mensajería, verificación de correo, recuperación de contraseña, moderación y límites de intentos siguen pendientes; la app aún no debe considerarse lista para producción con usuarios reales.
 
 ## Verificación
 

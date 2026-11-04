@@ -12,7 +12,7 @@ import (
 func TestProfilesFiltering(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/profiles?interest=Coffee&search=Sofia", nil)
 	response := httptest.NewRecorder()
-	routes(demoStore{}).ServeHTTP(response, request)
+	routes(demoStore{}, nil).ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -27,7 +27,7 @@ func TestProfilesFiltering(t *testing.T) {
 
 func TestMissingProfile(t *testing.T) {
 	response := httptest.NewRecorder()
-	routes(demoStore{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/profiles/unknown", nil))
+	routes(demoStore{}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/profiles/unknown", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d", response.Code)
 	}
@@ -39,7 +39,7 @@ func (unavailableStore) Ping(context.Context) error { return errors.New("databas
 
 func TestHealthReportsDatabaseFailure(t *testing.T) {
 	response := httptest.NewRecorder()
-	routes(unavailableStore{}).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	routes(unavailableStore{}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", response.Code)
 	}

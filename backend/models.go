@@ -6,12 +6,23 @@ import "time"
 // Do not return Account or PrivateLocation from public API handlers.
 type Account struct {
 	ID           string    `bson:"_id"`
+	Name         string    `bson:"name"`
 	Email        string    `bson:"email"`
 	PasswordHash string    `bson:"passwordHash"`
 	BirthDate    time.Time `bson:"birthDate"`
 	Status       string    `bson:"status"` // active, suspended, deleted
+	Interests    []string  `bson:"interests,omitempty"`
+	Personality  string    `bson:"personality,omitempty"`
+	DatePace     string    `bson:"datePace,omitempty"`
+	QuizComplete bool      `bson:"quizComplete"`
 	CreatedAt    time.Time `bson:"createdAt"`
 	UpdatedAt    time.Time `bson:"updatedAt"`
+}
+
+type authSession struct {
+	TokenHash string    `bson:"_id"`
+	AccountID string    `bson:"accountId"`
+	ExpiresAt time.Time `bson:"expiresAt"`
 }
 
 type GeoPoint struct {
