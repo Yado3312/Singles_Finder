@@ -6,8 +6,6 @@ services:
     environment:
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DATABASE: singlesfinder
-      DEMO_MODE: "false"
-      SEED_DEMO: "true"
     depends_on:
       mongo:
         condition: service_healthy

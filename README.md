@@ -1,6 +1,6 @@
 # Closer
 
-Frontend Angular, API Go y MongoDB. El frontend consume `/api/profiles` mediante `ProfileApiService`. La imagen Docker compila Angular y Go y los sirve desde el mismo puerto.
+Frontend Angular, API Go y MongoDB. El mapa muestra solicitudes reales compartidas entre cuentas registradas; la imagen Docker compila Angular y Go y los sirve desde el mismo puerto.
 
 ## Inicio rápido con Docker
 
@@ -10,7 +10,7 @@ En macOS y Windows instala Docker Desktop y usa contenedores Linux. En Linux ins
 docker compose up --build -d
 ```
 
-Abre `http://localhost:8080`. Compose levanta la aplicación y una instancia local de MongoDB, crea los índices y añade seis perfiles ficticios de forma repetible. **No necesitas credenciales de Atlas** para este modo.
+Abre `http://localhost:8080`. Compose levanta la aplicación y una instancia local de MongoDB y crea los índices. No se cargan perfiles ni solicitudes de muestra. **No necesitas credenciales de Atlas** para este modo.
 
 Si el puerto `8080` ya está ocupado, define `APP_PORT=18080` antes de ejecutar Compose y abre `http://localhost:18080`. En PowerShell: `$env:APP_PORT='18080'`; en macOS/Linux: `export APP_PORT=18080`. Para revisar el estado y detener los servicios:
 
@@ -39,11 +39,11 @@ Para arrancar solo la aplicación conectada a Atlas:
 docker compose -f compose.atlas.yaml up --build -d
 ```
 
-Abre `http://localhost:8080`. Este modo crea los índices de las colecciones en Atlas, pero **no inserta perfiles ficticios por defecto**. Si deseas crearlos en Atlas, configura `ATLAS_SEED_DEMO=true` en tu entorno antes de ejecutar Compose. En PowerShell: `$env:ATLAS_SEED_DEMO='true'`. En macOS/Linux: `export ATLAS_SEED_DEMO=true`.
+Abre `http://localhost:8080`. Este modo crea los índices de las colecciones en Atlas y no inserta datos de ejemplo.
 
 ## Desarrollo sin Docker
 
-Necesitas Node.js, npm y Go 1.25 o posterior. Configura `backend/.env` con Atlas o usa `DEMO_MODE=true` para perfiles ficticios en memoria.
+Necesitas Node.js, npm, Go 1.25 o posterior y MongoDB. Configura `backend/.env` con la URI de MongoDB.
 
 Terminal 1:
 
@@ -67,15 +67,15 @@ Abre `http://localhost:4200`. Angular envía `/api` a Go mediante `proxy.conf.js
 - `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` y `GET /api/auth/me`: registro, inicio/cierre de sesión y consulta de cuenta.
 - `PUT /api/auth/quiz`: guarda intereses y preferencias del test inicial.
 - `PUT /api/auth/settings`: actualiza el nombre de la cuenta.
-- `GET /api/profiles?search=Sofia` y `GET /api/profiles/{id}`: consulta perfiles; con MongoDB requieren una sesión válida.
-- [ProfileApiService](src/profile-api.service.ts): acceso reutilizable desde Angular.
-- [Modelo de datos](docs/data-model.md): cuentas, perfiles, ubicaciones privadas, likes, matches, mensajes, bloqueos y reportes.
+- `GET /api/requests`, `POST /api/requests` y `POST /api/requests/{id}/join`: consulta y publicación de solicitudes e inscripción; requieren una sesión válida.
+- [MapApiService](src/map-api.service.ts): acceso reutilizable a la API desde Angular.
+- [Modelo de datos](docs/data-model.md): cuentas, solicitudes, ubicaciones privadas, likes, matches, mensajes, bloqueos y reportes.
 
-El registro valida que la persona sea mayor de 18 años. Las contraseñas se guardan con bcrypt; la sesión se entrega en una cookie `HttpOnly` y solo se conserva en MongoDB un hash de su token. Al entrar por primera vez, la persona debe completar el test de intereses y preferencias. La aplicación tiene únicamente las pestañas Mapa y Configuración.
+El registro valida que la persona sea mayor de 18 años. Las contraseñas se guardan con bcrypt; la sesión se entrega en una cookie `HttpOnly` y solo se conserva en MongoDB un hash de su token. Al entrar por primera vez, la persona debe completar el test de intereses y preferencias. La aplicación tiene únicamente las pestañas Mapa y Configuración. El mapa se actualiza cada cinco segundos y guarda solicitudes en MongoDB para que todas las cuentas las vean. Al seleccionar un marcador se muestra el nombre, los intereses, la descripción y el número de personas apuntadas.
 
-El mapa pide permiso de ubicación al navegador y usa las coordenadas solo en el dispositivo para centrar la vista; no las envía ni las guarda en la cuenta. Si se deniega el permiso, el mapa sigue disponible en la vista inicial. La ubicación exacta nunca se comparte con otros perfiles.
+El mapa pide permiso de ubicación al navegador únicamente para centrar la vista; esas coordenadas no se guardan ni se transmiten. Para publicar una solicitud, la persona elige su punto en el mapa. El servidor redondea las coordenadas a tres decimales (aproximadamente 100 metros) y comparte solo esa ubicación aproximada con las demás cuentas.
 
-`DEMO_MODE=true` conserva el modo de perfiles ficticios en memoria y **no habilita cuentas persistentes**. Para probar registro, test y sesión, usa MongoDB con `DEMO_MODE=false`. Likes persistentes, edición completa de perfil, mensajería, verificación de correo, recuperación de contraseña, moderación y límites de intentos siguen pendientes; la app aún no debe considerarse lista para producción con usuarios reales.
+Likes persistentes, edición completa de perfil, mensajería, verificación de correo, recuperación de contraseña, moderación y límites de intentos siguen pendientes; la app aún no debe considerarse lista para producción con usuarios reales.
 
 ## Verificación
 

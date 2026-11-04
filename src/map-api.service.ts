@@ -1,25 +1,16 @@
 import { Injectable } from '@angular/core';
 
-export interface Profile {
+export interface MapRequest {
   id: string;
-  name: string;
-  age: number;
-  role: string;
-  interests: string[];
-  distance: string;
+  creatorName: string;
+  creatorInterests: string[];
+  description: string;
   lat: number;
   lng: number;
-  color: string;
-  initials: string;
-  online: boolean;
-  bio: string;
-  looking: string;
-  image: string;
-}
-
-export interface ProfileFilters {
-  interest?: string;
-  search?: string;
+  createdAt: string;
+  participantCount: number;
+  joinedByMe: boolean;
+  isCreator: boolean;
 }
 
 export interface Account {
@@ -46,7 +37,7 @@ export class ApiError extends Error {
 }
 
 @Injectable({ providedIn: 'root' })
-export class ProfileApiService {
+export class MapApiService {
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(path, {
       ...init,
@@ -88,20 +79,15 @@ export class ProfileApiService {
     return this.request<Account>('/api/auth/settings', { method: 'PUT', body: JSON.stringify({ name }) });
   }
 
-  async list(filters: ProfileFilters = {}, signal?: AbortSignal): Promise<Profile[]> {
-    const params = new URLSearchParams();
-    if (filters.interest && filters.interest !== 'Everyone') params.set('interest', filters.interest);
-    if (filters.search?.trim()) params.set('search', filters.search.trim());
-    const response = await fetch(`/api/profiles?${params}`, { signal, credentials: 'same-origin' });
-    if (!response.ok) throw new ApiError(`Profile request failed: ${response.status}`, response.status);
-    const data: unknown = await response.json();
-    if (!Array.isArray(data)) throw new Error('Invalid profile response');
-    return data as Profile[];
+  listRequests(signal?: AbortSignal): Promise<MapRequest[]> {
+    return this.request<MapRequest[]>('/api/requests', { signal });
   }
 
-  async get(id: string, signal?: AbortSignal): Promise<Profile> {
-    const response = await fetch(`/api/profiles/${encodeURIComponent(id)}`, { signal, credentials: 'same-origin' });
-    if (!response.ok) throw new ApiError(`Profile request failed: ${response.status}`, response.status);
-    return await response.json() as Profile;
+  createRequest(input: { description: string; lat: number; lng: number }): Promise<MapRequest> {
+    return this.request<MapRequest>('/api/requests', { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  joinRequest(id: string): Promise<MapRequest> {
+    return this.request<MapRequest>(`/api/requests/${encodeURIComponent(id)}/join`, { method: 'POST' });
   }
 }

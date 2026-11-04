@@ -89,9 +89,9 @@ func (s *memoryAccountStore) DeleteSession(_ context.Context, tokenHash string) 
 	return nil
 }
 
-func TestRegisterQuizAndProtectedDiscovery(t *testing.T) {
+func TestRegisterQuizAndProtectedRequests(t *testing.T) {
 	store := newMemoryAccountStore()
-	handler := routes(demoStore{}, store)
+	handler := routes(&memoryRequestStore{}, store)
 	register := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
 		`{"name":"Ana","email":" ANA@example.com ","password":"secure-password-123","birthDate":"2000-01-01"}`,
 	))
@@ -118,9 +118,9 @@ func TestRegisterQuizAndProtectedDiscovery(t *testing.T) {
 	}
 
 	unauthorized := httptest.NewRecorder()
-	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/profiles", nil))
+	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/requests", nil))
 	if unauthorized.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated profile status = %d", unauthorized.Code)
+		t.Fatalf("unauthenticated requests status = %d", unauthorized.Code)
 	}
 
 	quiz := httptest.NewRequest(http.MethodPut, "/api/auth/quiz", strings.NewReader(
@@ -141,11 +141,11 @@ func TestRegisterQuizAndProtectedDiscovery(t *testing.T) {
 	}
 
 	authorized := httptest.NewRecorder()
-	profileRequest := httptest.NewRequest(http.MethodGet, "/api/profiles", nil)
-	profileRequest.AddCookie(cookie)
-	handler.ServeHTTP(authorized, profileRequest)
+	mapRequest := httptest.NewRequest(http.MethodGet, "/api/requests", nil)
+	mapRequest.AddCookie(cookie)
+	handler.ServeHTTP(authorized, mapRequest)
 	if authorized.Code != http.StatusOK {
-		t.Fatalf("authenticated profile status = %d", authorized.Code)
+		t.Fatalf("authenticated requests status = %d", authorized.Code)
 	}
 
 	login := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(

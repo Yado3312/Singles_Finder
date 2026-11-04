@@ -25,9 +25,6 @@ func TestMongoConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.DemoMode {
-		t.Fatal("DEMO_MODE must be false to check Atlas")
-	}
 	client, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoURI).SetServerSelectionTimeout(10 * time.Second))
 	if err != nil {
 		t.Fatalf("MongoDB connection setup failed: %s", safeMongoError(err))
@@ -42,11 +39,11 @@ func TestMongoConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MongoDB database read failed: %s", safeMongoError(err))
 	}
-	count, err := client.Database(cfg.Database).Collection("profiles").CountDocuments(ctx, bson.D{})
+	count, err := client.Database(cfg.Database).Collection("requests").CountDocuments(ctx, bson.D{})
 	if err != nil {
-		t.Fatalf("MongoDB profile read failed: %s", safeMongoError(err))
+		t.Fatalf("MongoDB request read failed: %s", safeMongoError(err))
 	}
-	t.Logf("MongoDB ping OK; database %s readable; %d collections; %d profiles", cfg.Database, len(names), count)
+	t.Logf("MongoDB ping OK; database %s readable; %d collections; %d requests", cfg.Database, len(names), count)
 }
 
 func safeMongoError(err error) string {

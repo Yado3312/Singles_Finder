@@ -9,8 +9,6 @@ services:
     environment:
       ADDR: 0.0.0.0:8080
       WEB_DIR: /app/web
-      DEMO_MODE: "false"
-      SEED_DEMO: "${ATLAS_SEED_DEMO:-false}"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
       interval: 10s

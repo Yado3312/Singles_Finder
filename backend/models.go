@@ -73,12 +73,3 @@ type Report struct {
 	Status            string    `bson:"status"` // open, reviewing, resolved
 	CreatedAt         time.Time `bson:"createdAt"`
 }
-
-// ProfileRecord adds ownership and timestamps to the public discovery projection.
-// Public handlers decode only Profile, so accountId is never serialized to clients.
-type ProfileRecord struct {
-	Profile   `bson:",inline"`
-	AccountID string    `bson:"accountId"`
-	CreatedAt time.Time `bson:"createdAt"`
-	UpdatedAt time.Time `bson:"updatedAt"`
-}

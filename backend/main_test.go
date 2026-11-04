@@ -2,44 +2,62 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestProfilesFiltering(t *testing.T) {
-	request := httptest.NewRequest(http.MethodGet, "/api/profiles?interest=Coffee&search=Sofia", nil)
-	response := httptest.NewRecorder()
-	routes(demoStore{}, nil).ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d", response.Code)
-	}
-	var result []Profile
-	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
-		t.Fatal(err)
-	}
-	if len(result) != 1 || result[0].Name != "Sofia" {
-		t.Fatalf("unexpected profiles: %+v", result)
-	}
+type memoryRequestStore struct {
+	records []mapRequestRecord
 }
 
-func TestMissingProfile(t *testing.T) {
+func (s *memoryRequestStore) ListRequests(context.Context) ([]mapRequestRecord, error) {
+	return append([]mapRequestRecord(nil), s.records...), nil
+}
+
+func (s *memoryRequestStore) CreateRequest(_ context.Context, record mapRequestRecord) error {
+	s.records = append(s.records, record)
+	return nil
+}
+
+func (s *memoryRequestStore) JoinRequest(_ context.Context, id, accountID string) (mapRequestRecord, error) {
+	for i := range s.records {
+		record := &s.records[i]
+		if record.ID != id {
+			continue
+		}
+		if record.CreatorID == accountID {
+			return mapRequestRecord{}, errOwnRequest
+		}
+		for _, participant := range record.Participants {
+			if participant == accountID {
+				return mapRequestRecord{}, errAlreadyJoined
+			}
+		}
+		record.Participants = append(record.Participants, accountID)
+		return *record, nil
+	}
+	return mapRequestRecord{}, errRequestNotFound
+}
+
+func (s *memoryRequestStore) Ping(context.Context) error { return nil }
+
+func TestRemovedFictionalProfilesEndpoint(t *testing.T) {
 	response := httptest.NewRecorder()
-	routes(demoStore{}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/profiles/unknown", nil))
+	routes(&memoryRequestStore{}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/profiles", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d", response.Code)
 	}
 }
 
-type unavailableStore struct{ demoStore }
+type unavailableStore struct{ *memoryRequestStore }
 
 func (unavailableStore) Ping(context.Context) error { return errors.New("database offline") }
 
 func TestHealthReportsDatabaseFailure(t *testing.T) {
 	response := httptest.NewRecorder()
-	routes(unavailableStore{}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+	routes(unavailableStore{&memoryRequestStore{}}, nil).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 	if response.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d", response.Code)
 	}

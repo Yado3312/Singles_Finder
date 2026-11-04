@@ -14,7 +14,7 @@ func TestWebAndAPIShareOrigin(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html>Closer</html>"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	handler := withWeb(routes(demoStore{}, nil), dir)
+	handler := withWeb(routes(&memoryRequestStore{}, nil), dir)
 	for _, path := range []string{"/", "/discover"} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))

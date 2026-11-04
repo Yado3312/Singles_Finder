@@ -104,9 +104,9 @@
     </div>
     <div class="sidebar-spacer"></div>
     <div class="connection-card">
-      <div class="sparkle">✦</div><strong>Let a little chemistry surprise you.</strong>
-      <p>Your next great connection could be closer than you think.</p>
-      <button (click)="openTab('map')">Take a little look <span>↗</span></button>
+      <div class="sparkle">✦</div><strong>Un plan real puede empezar aquí.</strong>
+      <p>Publica una solicitud y conoce a las personas que quieran sumarse.</p>
+      <button (click)="openTab('map'); toggleRequestForm()">Crear solicitud <span>↗</span></button>
     </div>
     <div class="user-card">
       <span class="user-avatar">{{account()?.name?.slice(0, 1)?.toUpperCase()}}</span>
@@ -119,7 +119,7 @@
       <div class="mobile-brand">✳ closer<span>.</span></div>
       <div class="breadcrumb">Your space <span>/</span> <strong>{{activeTab() === 'map' ? 'The map' : 'My settings'}}</strong></div>
       <div class="top-actions">
-        <span class="privacy-note"><span class="privacy-dot"></span> Your location is just for you</span>
+        <span class="privacy-note"><span class="privacy-dot"></span> Ubicación aproximada en solicitudes</span>
         <button class="top-avatar" aria-label="Open settings" (click)="openTab('settings')">{{account()?.name?.slice(0, 1)?.toUpperCase()}}</button>
       </div>
     </header>
@@ -127,46 +127,89 @@
     <div class="content" *ngIf="activeTab() === 'map'">
       <section class="intro">
         <div>
-          <div class="eyebrow"><span class="eyebrow-line"></span> A LITTLE MAGIC, A LITTLE CLOSER</div>
-          <h1>Your kind of people, <em>nearby.</em></h1>
-          <p>Take a peek around. Your exact location stays on this device — always.</p>
+          <div class="eyebrow"><span class="eyebrow-line"></span> CONEXIONES CERCA DE TI</div>
+          <h1>Planes reales, <em>en el mapa.</em></h1>
+          <p>Publica lo que te gustaría hacer y otras personas podrán verlo y apuntarse.</p>
         </div>
+        <button class="primary-button create-request-button" type="button" (click)="toggleRequestForm()">
+          {{requestFormOpen() ? 'Cerrar formulario' : '＋ Crear solicitud'}}
+        </button>
       </section>
-      <div class="api-status" *ngIf="profileError()" role="alert"><span>{{profileError()}}</span><button (click)="loadProfiles()">Try again</button></div>
-      <section class="toolbar">
-        <div class="search-wrap"><span>⌕</span>
-          <input type="search" placeholder="Find a person or a shared interest" aria-label="Search people or interests"
-            [value]="search()" (input)="setSearch($any($event.target).value)">
-        </div>
-        <span class="map-privacy"><span class="privacy-dot"></span> Approximate profiles</span>
-      </section>
-      <div class="discovery-grid">
-        <section class="map-panel">
-          <div id="map" role="application" aria-label="Map of profiles and your location"></div>
-          <div class="map-heading"><span class="map-heading-icon">⌖</span><span><strong>Your neighborhood</strong><small>Your location is only shown to you</small></span></div>
-          <div class="map-bottom"><span><span class="live-dot"></span> {{filtered().length}} {{filtered().length === 1 ? 'profile' : 'profiles'}} to discover</span>
-            <button type="button" class="map-hint location-action" (click)="showToast('Your location stays on this device. It is never stored or shared.')">A note on privacy</button>
-          </div>
-        </section>
-        <aside class="profile-panel" *ngIf="selected() as person; else profilePlaceholder">
-          <div class="panel-head"><span>A LITTLE INTRODUCTION</span><span class="panel-head-right"><span class="little-star">✦</span> Someone to discover</span></div>
-          <div class="profile-image"><img [src]="person.image" [alt]="person.name"><div class="image-gradient"></div>
-            <span class="image-badge"><span class="live-dot"></span> {{person.online ? 'Around right now' : 'Recently around'}}</span>
-          </div>
-          <div class="profile-body">
-            <div class="profile-title"><div><h2>{{person.name}}, {{person.age}}</h2><p>{{person.role}}</p></div></div>
-            <div class="distance"><span>⌖</span> {{person.distance}} <span class="distance-divider">·</span> Approximate area</div>
-            <div class="about-label">A LITTLE ABOUT THEM</div><p class="bio">{{person.bio}}</p>
-            <div class="about-label interests-label">A FEW THINGS THEY LOVE</div>
-            <div class="chips"><span *ngFor="let interest of person.interests">{{interest}}</span></div>
-            <div class="looking"><span class="looking-icon">♡</span><span><small>HOPING TO FIND</small><strong>{{person.looking}}</strong></span></div>
-            <p class="connect-help">The loveliest connections start with a hello. Coming soon.</p>
-          </div>
-        </aside>
-        <ng-template #profilePlaceholder>
-          <aside class="profile-panel empty-profile">{{loadingProfiles() ? 'Finding your people…' : profileError() ? 'We could not load profiles just now.' : 'No profiles here just yet. Your story is only beginning.'}}</aside>
-        </ng-template>
+      <div class="api-status" *ngIf="requestError()" role="alert">
+        <span>{{requestError()}}</span><button type="button" (click)="loadRequests()">Reintentar</button>
       </div>
+      <section class="map-panel full-map">
+        <div id="map" role="application" aria-label="Mapa de solicitudes de actividades"></div>
+        <div class="map-heading"><span class="map-heading-icon">⌖</span><span>
+          <strong>Solicitudes de la comunidad</strong>
+          <small>Selecciona un punto del mapa para crear la tuya</small>
+        </span></div>
+        <section class="request-detail" *ngIf="selectedRequest() as request">
+          <div class="request-person">
+            <span class="request-avatar">{{request.creatorName.slice(0, 1).toUpperCase()}}</span>
+            <div><span class="eyebrow">SOLICITUD DE</span><h2>{{request.creatorName}}</h2>
+              <div class="chips request-interests"><span *ngFor="let interest of request.creatorInterests">{{interest}}</span></div>
+            </div>
+          </div>
+          <div class="request-copy"><div class="about-label">SU PLAN</div><p>{{request.description}}</p>
+            <small>{{request.participantCount}} {{request.participantCount === 1 ? 'persona apuntada' : 'personas apuntadas'}} · {{request.createdAt | date:'short'}}</small>
+          </div>
+          <button *ngIf="!request.isCreator && !request.joinedByMe" class="primary-button join-request" type="button" (click)="joinRequest(request)">Apuntarme <span>↗</span></button>
+          <span class="joined-label" *ngIf="request.joinedByMe">{{request.isCreator ? 'Tu solicitud' : 'Ya te apuntaste'}}</span>
+        </section>
+        <div class="map-bottom">
+          <span><span class="live-dot"></span> {{mapRequests().length}} {{mapRequests().length === 1 ? 'solicitud publicada' : 'solicitudes publicadas'}}</span>
+          <span class="map-hint">{{loadingRequests() ? 'Actualizando…' : 'Actualización automática cada 5 segundos'}}</span>
+        </div>
+      </section>
+
+      <section class="request-form-card" *ngIf="requestFormOpen()">
+        <div class="request-form-heading">
+          <div><div class="eyebrow"><span class="eyebrow-line"></span> NUEVA SOLICITUD</div>
+            <h2>¿Qué plan tienes en mente?</h2>
+            <p>Describe tu plan. Las demás personas podrán ver quién lo propone y apuntarse.</p>
+          </div>
+          <button type="button" class="close-form" aria-label="Cerrar formulario" (click)="toggleRequestForm()">×</button>
+        </div>
+        <label class="request-description">Descripción
+          <textarea maxlength="500" rows="4" placeholder="Ej. Busco compañía para tomar un café y platicar este sábado."
+            [value]="requestDescription()" (input)="requestDescription.set($any($event.target).value)"></textarea>
+          <small>{{requestDescription().length}}/500 · Escribe al menos 10 caracteres.</small>
+        </label>
+        <div class="request-location">
+          <span class="map-heading-icon">⌖</span>
+          <span><strong>{{requestLocation() ? 'Punto aproximado seleccionado' : 'Elige un punto en el mapa'}}</strong>
+            <small *ngIf="requestLocation() as point">{{point.lat}}, {{point.lng}} · se muestra con precisión aproximada</small>
+            <small *ngIf="!requestLocation()">Haz clic en el lugar donde propones el plan.</small>
+          </span>
+        </div>
+        <p class="form-error" *ngIf="requestError()" role="alert">{{requestError()}}</p>
+        <button class="primary-button publish-request" type="button"
+          [disabled]="savingRequest() || requestDescription().trim().length < 10 || !requestLocation()"
+          (click)="createMapRequest()">
+          {{savingRequest() ? 'Publicando…' : 'Publicar solicitud'}} <span>↗</span>
+        </button>
+      </section>
+
+      <section class="request-list-section">
+        <div class="request-list-heading"><div><div class="eyebrow"><span class="eyebrow-line"></span> EN TIEMPO REAL</div>
+          <h2>Solicitudes publicadas</h2></div>
+          <button type="button" class="secondary-button" (click)="loadRequests()">Actualizar <span>↻</span></button>
+        </div>
+        <div class="request-list" *ngIf="mapRequests().length; else emptyRequests">
+          <button class="request-list-item" type="button" *ngFor="let request of mapRequests()"
+            [class.selected]="selectedRequest()?.id === request.id" (click)="selectRequest(request)">
+            <span class="request-avatar">{{request.creatorName.slice(0, 1).toUpperCase()}}</span>
+            <span class="request-list-copy"><strong>{{request.creatorName}}</strong><span>{{request.description}}</span>
+              <small>{{request.participantCount}} {{request.participantCount === 1 ? 'persona apuntada' : 'personas apuntadas'}}</small>
+            </span>
+            <span class="request-list-arrow">↗</span>
+          </button>
+        </div>
+        <ng-template #emptyRequests>
+          <div class="empty-requests">{{loadingRequests() ? 'Cargando solicitudes…' : 'Todavía no hay solicitudes. ¡Publica la primera e invita a la comunidad!'}}</div>
+        </ng-template>
+      </section>
     </div>
 
     <div class="content settings-content" *ngIf="activeTab() === 'settings'">
@@ -197,7 +240,7 @@
         <button class="secondary-button" type="button" (click)="editPersonalityTest()">Change my answers <span>↗</span></button>
       </section>
       <section class="settings-card privacy-card">
-        <div class="settings-heading"><span class="settings-icon">⌖</span><div><h2>Your location is yours</h2><p>We ask your browser to center the map. Your coordinates stay on this device and are never saved to your account.</p></div></div>
+        <div class="settings-heading"><span class="settings-icon">⌖</span><div><h2>Tu ubicación es tuya</h2><p>La ubicación de tus solicitudes se redondea para mostrar solo un área aproximada. La ubicación precisa del navegador solo se usa para centrar el mapa.</p></div></div>
       </section>
       <button class="logout-button" type="button" (click)="logout()">Log out</button>
     </div>

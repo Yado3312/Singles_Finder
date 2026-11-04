@@ -1,9 +1,9 @@
 import 'zone.js';
 import { bootstrapApplication } from '@angular/platform-browser';
-import { Component, AfterViewInit, OnDestroy, inject, signal, computed } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
-import { Account, ApiError, PersonalityAnswers, Profile, ProfileApiService } from './profile-api.service';
+import { Account, ApiError, MapApiService, MapRequest, PersonalityAnswers } from './map-api.service';
 
 const interestOptions = [
   'Nature', 'Music', 'Art', 'Coffee', 'Travel', 'Cooking',
@@ -18,7 +18,7 @@ const interestOptions = [
   styleUrl: './app.component.css',
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
-  private readonly api = inject(ProfileApiService);
+  private readonly api = inject(MapApiService);
   readonly page = signal<'loading' | 'auth' | 'quiz' | 'app'>('loading');
   readonly authMode = signal<'login' | 'register'>('login');
   readonly activeTab = signal<'map' | 'settings'>('map');
@@ -30,31 +30,31 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly selectedInterests = signal<string[]>([]);
   readonly personality = signal('');
   readonly datePace = signal('');
-  readonly people = signal<Profile[]>([]);
-  readonly selected = signal<Profile | null>(null);
-  readonly loadingProfiles = signal(false);
-  readonly search = signal('');
-  readonly profileError = signal('');
+  readonly mapRequests = signal<MapRequest[]>([]);
+  readonly selectedRequest = signal<MapRequest | null>(null);
+  readonly requestDescription = signal('');
+  readonly requestLocation = signal<{ lat: number; lng: number } | null>(null);
+  readonly requestFormOpen = signal(false);
+  readonly loadingRequests = signal(false);
+  readonly requestError = signal('');
+  readonly savingRequest = signal(false);
   readonly settingsName = signal('');
   readonly savingSettings = signal(false);
-  readonly filtered = computed(() => this.people());
   private map?: L.Map;
   private markers: L.Marker[] = [];
-  private userMarker?: L.CircleMarker;
+  private locationMarker?: L.CircleMarker;
   private toastTimer?: ReturnType<typeof setTimeout>;
-  private searchTimer?: ReturnType<typeof setTimeout>;
-  private requestId = 0;
-  private request?: AbortController;
+  private requestTimer?: ReturnType<typeof setInterval>;
+  private loadingRequestList = false;
+  private hasFittedRequests = false;
 
   ngAfterViewInit() {
     void this.restoreSession();
   }
 
   ngOnDestroy() {
-    this.request?.abort();
     this.destroyMap();
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    if (this.searchTimer) clearTimeout(this.searchTimer);
   }
 
   private async restoreSession() {
@@ -168,8 +168,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.page.set('auth');
       this.activeTab.set('map');
       this.error.set('');
-      this.people.set([]);
-      this.selected.set(null);
+      this.mapRequests.set([]);
+      this.selectedRequest.set(null);
+      this.requestDescription.set('');
+      this.requestLocation.set(null);
+      this.requestFormOpen.set(false);
       this.destroyMap();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'We could not sign you out. Please try again.'));
@@ -187,7 +190,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.activeTab.set('map');
     setTimeout(() => {
       this.initMap();
-      this.loadProfiles();
+      void this.loadRequests();
+      this.requestTimer = setInterval(() => void this.loadRequests(), 5000);
     }, 0);
   }
 
@@ -195,22 +199,32 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const element = document.getElementById('map');
     if (!element || this.page() !== 'app' || this.activeTab() !== 'map') return;
     this.destroyMap();
-    this.map = L.map(element, { zoomControl: false, scrollWheelZoom: false })
-      .setView([28.6345, -106.0810], 12);
+    this.hasFittedRequests = false;
+    this.map = L.map(element, { zoomControl: false, scrollWheelZoom: true, minZoom: 2 })
+      .setView([20, 0], 2);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(this.map);
     L.control.zoom({ position: 'bottomright' }).addTo(this.map);
-    this.renderMarkers();
+    this.map.on('click', event => {
+      this.requestLocation.set({
+        lat: Math.round(event.latlng.lat * 1000) / 1000,
+        lng: Math.round(event.latlng.lng * 1000) / 1000,
+      });
+      this.renderLocationMarker();
+      if (!this.requestFormOpen()) this.requestFormOpen.set(true);
+    });
     this.locateUser();
   }
 
   private destroyMap() {
+    if (this.requestTimer) clearInterval(this.requestTimer);
+    this.requestTimer = undefined;
     this.map?.remove();
     this.map = undefined;
     this.markers = [];
-    this.userMarker = undefined;
+    this.locationMarker = undefined;
   }
 
   private locateUser() {
@@ -219,79 +233,138 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     navigator.geolocation.getCurrentPosition(position => {
-      if (!this.map) return;
+      if (!this.map || this.mapRequests().length) return;
       const { latitude, longitude } = position.coords;
       this.map.setView([latitude, longitude], 13);
-      this.userMarker?.remove();
-      this.userMarker = L.circleMarker([latitude, longitude], {
-        radius: 9,
-        color: '#ffffff',
-        weight: 3,
-        fillColor: '#c87f62',
-        fillOpacity: 1,
-      }).addTo(this.map);
-      this.userMarker.bindPopup('Your location on this device. It is never stored or shared.');
     }, () => {
-      this.showToast('Location permission was not granted. The map is still yours to explore.');
+      this.showToast('No se concedió el permiso de ubicación. Puedes explorar el mapa y elegir un punto manualmente.');
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   }
 
-  async loadProfiles() {
-    const currentRequest = ++this.requestId;
-    this.request?.abort();
-    this.request = new AbortController();
-    this.loadingProfiles.set(true);
-    this.profileError.set('');
+  async loadRequests() {
+    if (this.loadingRequestList) return;
+    this.loadingRequestList = true;
+    this.loadingRequests.set(true);
     try {
-      const profiles = await this.api.list({ search: this.search() }, this.request.signal);
-      if (currentRequest !== this.requestId) return;
-      this.people.set(profiles);
-      if (!profiles.length) this.selected.set(null);
-      else if (!profiles.some(profile => profile.id === this.selected()?.id)) this.selected.set(profiles[0]);
+      const requests = await this.api.listRequests();
+      this.mapRequests.set(requests);
+      const selectedID = this.selectedRequest()?.id;
+      this.selectedRequest.set(requests.find(item => item.id === selectedID) ?? null);
       this.renderMarkers();
+      if (!this.hasFittedRequests && requests.length) {
+        this.fitRequests(requests);
+        this.hasFittedRequests = true;
+      }
+      this.requestError.set('');
     } catch (error) {
-      if (currentRequest !== this.requestId) return;
-      this.people.set([]);
-      this.selected.set(null);
-      this.profileError.set(this.errorMessage(error, 'We could not load profiles. Please try again.'));
-      this.renderMarkers();
+      this.requestError.set(this.errorMessage(error, 'No se pudieron cargar las solicitudes. Inténtalo de nuevo.'));
     } finally {
-      if (currentRequest === this.requestId) this.loadingProfiles.set(false);
+      this.loadingRequestList = false;
+      this.loadingRequests.set(false);
     }
   }
 
-  setSearch(value: string) {
-    this.search.set(value);
-    if (this.searchTimer) clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => void this.loadProfiles(), 250);
+  toggleRequestForm() {
+    this.requestFormOpen.update(open => !open);
+    this.requestError.set('');
+    if (this.requestFormOpen() && !this.requestLocation() && this.map) {
+      const center = this.map.getCenter();
+      this.requestLocation.set({
+        lat: Math.round(center.lat * 1000) / 1000,
+        lng: Math.round(center.lng * 1000) / 1000,
+      });
+      this.renderLocationMarker();
+    }
+  }
+
+  async createMapRequest() {
+    const location = this.requestLocation();
+    if (!location) {
+      this.requestError.set('Selecciona un punto en el mapa para ubicar la solicitud.');
+      return;
+    }
+    this.savingRequest.set(true);
+    this.requestError.set('');
+    try {
+      const created = await this.api.createRequest({
+        description: this.requestDescription(),
+        ...location,
+      });
+      this.requestDescription.set('');
+      this.requestFormOpen.set(false);
+      this.selectedRequest.set(created);
+      this.showToast('Tu solicitud ya está visible en el mapa.');
+      await this.loadRequests();
+      this.selectRequest(this.mapRequests().find(item => item.id === created.id) ?? created);
+    } catch (error) {
+      this.requestError.set(this.errorMessage(error, 'No se pudo publicar la solicitud. Inténtalo de nuevo.'));
+    } finally {
+      this.savingRequest.set(false);
+    }
+  }
+
+  async joinRequest(request: MapRequest) {
+    this.requestError.set('');
+    try {
+      await this.api.joinRequest(request.id);
+      await this.loadRequests();
+      this.showToast('Te has apuntado a la solicitud.');
+    } catch (error) {
+      this.requestError.set(this.errorMessage(error, 'No se pudo completar la inscripción.'));
+    }
+  }
+
+  selectRequest(request: MapRequest) {
+    this.selectedRequest.set(request);
+    this.map?.panTo([request.lat, request.lng], { animate: true });
+    this.renderMarkers();
+  }
+
+  private fitRequests(requests: MapRequest[]) {
+    if (!this.map || !requests.length) return;
+    if (requests.length === 1) {
+      this.map.setView([requests[0].lat, requests[0].lng], 13);
+      return;
+    }
+    this.map.fitBounds(
+      L.latLngBounds(requests.map(request => [request.lat, request.lng] as L.LatLngTuple)),
+      { padding: [50, 50], maxZoom: 14 },
+    );
   }
 
   private renderMarkers() {
     if (!this.map) return;
     this.markers.forEach(marker => marker.remove());
-    this.markers = this.filtered().map(profile => {
+    this.markers = this.mapRequests().map(request => {
       const icon = L.divIcon({
-        className: 'person-marker',
-        html: `<div class="marker-shell ${this.selected()?.id === profile.id ? 'is-selected' : ''}"><img src="${this.escapeAttribute(profile.image)}" alt=""></div>`,
-        iconSize: [62, 62],
-        iconAnchor: [31, 31],
+        className: 'request-marker',
+        html: `<span class="request-marker-pin ${this.selectedRequest()?.id === request.id ? 'is-selected' : ''}">♡</span>`,
+        iconSize: [42, 48],
+        iconAnchor: [21, 44],
       });
-      const marker = L.marker([profile.lat, profile.lng], { icon }).addTo(this.map!);
-      marker.on('click', () => this.select(profile));
+      const marker = L.marker([request.lat, request.lng], { icon }).addTo(this.map!);
+      marker.bindTooltip(this.escapeAttribute(request.creatorName), { direction: 'top', offset: [0, -35] });
+      marker.on('click', () => this.selectRequest(request));
       return marker;
     });
+    this.renderLocationMarker();
+  }
+
+  private renderLocationMarker() {
+    if (!this.map) return;
+    this.locationMarker?.remove();
+    const point = this.requestLocation();
+    if (!point) return;
+    this.locationMarker = L.circleMarker([point.lat, point.lng], {
+      radius: 9, color: '#fff', weight: 3, fillColor: '#6b2b83', fillOpacity: 1,
+    }).addTo(this.map);
+    this.locationMarker.bindTooltip('Ubicación aproximada de tu solicitud');
   }
 
   private escapeAttribute(value: string) {
     return value.replace(/[&"<>']/g, character => ({
       '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;', "'": '&#39;',
     }[character] ?? character));
-  }
-
-  select(profile: Profile) {
-    this.selected.set(profile);
-    this.renderMarkers();
-    this.map?.panTo([profile.lat, profile.lng], { animate: true });
   }
 
   showToast(message: string) {
@@ -302,7 +375,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   private errorMessage(error: unknown, fallback: string) {
     if (error instanceof ApiError) {
-      if (error.status === 409) return 'An account with that email already exists.';
+      if (error.status === 409) {
+        return error.message.includes('solicitud') ? error.message : 'Ya existe una cuenta con ese correo.';
+      }
       if (error.status === 401) return 'That email and password do not match.';
       if (error.status === 400) return error.message;
       if (error.status >= 500) return 'The server could not complete your request. Please try again later.';

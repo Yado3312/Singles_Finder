@@ -14,8 +14,6 @@ type config struct {
 	Addr     string
 	MongoURI string
 	Database string
-	DemoMode bool
-	SeedDemo bool
 	WebDir   string
 }
 
@@ -62,19 +60,16 @@ func loadEnvFile() error {
 }
 
 func readConfig() (config, error) {
-	cfg := config{Addr: os.Getenv("ADDR"), Database: os.Getenv("MONGODB_DATABASE"), DemoMode: os.Getenv("DEMO_MODE") == "true", SeedDemo: os.Getenv("SEED_DEMO") == "true", WebDir: os.Getenv("WEB_DIR")}
+	cfg := config{Addr: os.Getenv("ADDR"), Database: os.Getenv("MONGODB_DATABASE"), WebDir: os.Getenv("WEB_DIR")}
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:8080"
 	}
 	if cfg.Database == "" {
 		cfg.Database = "singlesfinder"
 	}
-	if cfg.DemoMode {
-		return cfg, nil
-	}
 	uri := strings.TrimSpace(os.Getenv("MONGODB_URI"))
 	if uri == "" {
-		return cfg, fmt.Errorf("set MONGODB_URI in backend/.env (or set DEMO_MODE=true)")
+		return cfg, fmt.Errorf("set MONGODB_URI in backend/.env")
 	}
 	if strings.Contains(uri, "<") || strings.Contains(uri, ">") {
 		return cfg, fmt.Errorf("MONGODB_URI still contains placeholders")

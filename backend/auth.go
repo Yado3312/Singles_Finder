@@ -355,17 +355,6 @@ func requireAccount(w http.ResponseWriter, r *http.Request, store accountStore) 
 	return account, nil
 }
 
-func allowDiscoveryRequest(w http.ResponseWriter, r *http.Request, store accountStore) bool {
-	if store == nil {
-		return true
-	}
-	if _, _, err := accountForRequest(r.Context(), r, store); err != nil {
-		writeAccountError(w, err)
-		return false
-	}
-	return true
-}
-
 func validQuiz(input quizRequest) bool {
 	allowedInterests := map[string]bool{
 		"Nature": true, "Music": true, "Art": true, "Coffee": true,
