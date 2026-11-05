@@ -6,7 +6,7 @@
 | **Commit analysed** | `f31aa1b` (branch `main`, 2026-11-03) |
 | **Stack** | Angular 20 (SPA) + Leaflet, Go API (`net/http`), MongoDB (driver v2.9.2), Docker Compose |
 | **Report date** | 2026-11-04 |
-| **Authors** | `[CONFIRM: team member names]` |
+| **Authors** | `MAURO RIVERO / RENE TREJO / YADIER GONZALEZ / JOHAN BERTRAND / LIAM AGUILAR / GERARDO TERRAZAS` |
 
 ## Summary
 
