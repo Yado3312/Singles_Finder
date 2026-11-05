@@ -18,7 +18,12 @@ func jsonResponse(w http.ResponseWriter, status int, value any) {
 }
 
 func routes(store requestStore, accounts accountStore) http.Handler {
+	return routesWithPlaces(store, accounts, newPlacesClient(nil))
+}
+
+func routesWithPlaces(store requestStore, accounts accountStore, places *placesClient) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/places", places.handler(accounts))
 	registerAuthRoutes(mux, accounts)
 	registerMapRequestRoutes(mux, store, accounts)
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {

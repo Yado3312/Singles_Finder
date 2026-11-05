@@ -86,3 +86,16 @@ CHECK_MONGODB=1 go test -run TestMongoConnection -count=1 -v
 ```
 
 `TestMongoConnection` hace `ping` y lecturas, sin escribir datos. El build de Angular se verifica con `npm run build` desde la raíz.
+
+## API de solicitudes del mapa
+
+Las rutas principales del módulo Mapa están protegidas por sesión. La app Angular consume estas rutas desde `MapApiService`; `GET /api/places` consulta cafeterías cercanas con Nominatim (OpenStreetMap) desde el backend y devuelve un error `502` genérico si el proveedor falla. La búsqueda está limitada a 1.2 km y solicita hasta 40 resultados. Nominatim puede devolver menos y no garantiza una lista completa; los lugares también deben estar registrados en OpenStreetMap.
+
+| Método | Endpoint | Entrada | Respuesta correcta | Errores principales |
+|---|---|---|---|---|
+| `GET` | `/api/requests` | Cookie de sesión | `200` lista JSON | `401`, `500` |
+| `POST` | `/api/requests` | `description`, `lat`, `lng` en JSON | `201` solicitud | `400`, `401`, `403`, `500` |
+| `POST` | `/api/requests/{id}/join` | ID en URL y cookie de sesión | `200` solicitud | `400`, `401`, `404`, `409` |
+| `GET` | `/api/places?lat={lat}&lng={lng}` | Coordenadas y cookie de sesión | `200` lugares cercanos | `400`, `401`, `502` |
+
+Prueba las rutas con `cd backend; go test ./...`. Para probar lugares desde la interfaz, inicia sesión, abre Mapa y pulsa “Buscar lugares cercanos”.

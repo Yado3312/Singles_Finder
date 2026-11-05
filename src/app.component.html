@@ -163,6 +163,15 @@
         </div>
       </section>
 
+      <section class="nearby-panel">
+        <div><div class="eyebrow"><span class="eyebrow-line"></span> OPENSTREETMAP</div><h2>Lugares cercanos</h2><p>Busca cafeterías cerca de tu ubicación. Si no aparecen resultados, permite el acceso a ubicación o haz clic en el mapa para elegir otro punto.</p></div>
+        <button class="secondary-button" type="button" [disabled]="loadingPlaces()" (click)="findNearbyPlaces()">{{loadingPlaces() ? 'Buscando…' : 'Buscar lugares cercanos'}}</button>
+        <p class="form-error" *ngIf="placesError()" role="alert">{{placesError()}}</p>
+        <div class="nearby-list" *ngIf="nearbyPlaces().length"><button type="button" class="nearby-place" *ngFor="let place of nearbyPlaces()" (click)="focusPlace(place)"><strong>{{place.name}}</strong><small>{{place.category}} · {{place.distanceMeters < 1000 ? (place.distanceMeters + ' m') : ((place.distanceMeters / 1000 | number:'1.1-1') + ' km')}}</small></button></div>
+        <p class="nearby-empty" *ngIf="placesSearched() && !nearbyPlaces().length && !placesError()" role="status">No se encontraron cafeterías cerca de este punto. Elige otro lugar en el mapa y vuelve a buscar.</p>
+        <small class="nearby-attribution">Datos de © OpenStreetMap contributors</small>
+      </section>
+
       <section class="request-form-card" *ngIf="requestFormOpen()">
         <div class="request-form-heading">
           <div><div class="eyebrow"><span class="eyebrow-line"></span> NUEVA SOLICITUD</div>

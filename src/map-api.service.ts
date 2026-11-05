@@ -13,6 +13,8 @@ export interface MapRequest {
   isCreator: boolean;
 }
 
+export interface NearbyPlace { id: string; name: string; category: string; lat: number; lng: number; distanceMeters: number; }
+
 export interface Account {
   id: string;
   name: string;
@@ -89,5 +91,10 @@ export class MapApiService {
 
   joinRequest(id: string): Promise<MapRequest> {
     return this.request<MapRequest>(`/api/requests/${encodeURIComponent(id)}/join`, { method: 'POST' });
+  }
+
+  nearbyPlaces(lat: number, lng: number): Promise<NearbyPlace[]> {
+    const query = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+    return this.request<NearbyPlace[]>(`/api/places?${query}`);
   }
 }

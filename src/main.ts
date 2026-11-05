@@ -3,7 +3,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { Component, AfterViewInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
-import { Account, ApiError, MapApiService, MapRequest, PersonalityAnswers } from './map-api.service';
+import { Account, ApiError, MapApiService, MapRequest, NearbyPlace, PersonalityAnswers } from './map-api.service';
 
 const interestOptions = [
   'Nature', 'Music', 'Art', 'Coffee', 'Travel', 'Cooking',
@@ -38,6 +38,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly loadingRequests = signal(false);
   readonly requestError = signal('');
   readonly savingRequest = signal(false);
+  readonly nearbyPlaces = signal<NearbyPlace[]>([]);
+  readonly placesSearched = signal(false);
+  readonly loadingPlaces = signal(false);
+  readonly placesError = signal('');
+  private placeMarkers: L.CircleMarker[] = [];
   readonly settingsName = signal('');
   readonly savingSettings = signal(false);
   private map?: L.Map;
@@ -224,6 +229,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.map?.remove();
     this.map = undefined;
     this.markers = [];
+    this.placeMarkers.forEach(marker => marker.remove());
+    this.placeMarkers = [];
     this.locationMarker = undefined;
   }
 
@@ -275,6 +282,45 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
       this.renderLocationMarker();
     }
+  }
+
+  async findNearbyPlaces() {
+    if (!this.map) {
+      this.placesError.set('El mapa aún se está cargando. Espera un momento e inténtalo de nuevo.');
+      return;
+    }
+    const point = this.selectedRequest() ?? this.requestLocation() ?? this.map.getCenter();
+    this.loadingPlaces.set(true); this.placesError.set('');
+    try {
+      const places = await this.api.nearbyPlaces(point.lat, point.lng);
+      this.nearbyPlaces.set(places.map(place => ({
+        ...place,
+        distanceMeters: place.distanceMeters ?? Math.round(this.distanceMeters(point.lat, point.lng, place.lat, place.lng)),
+      })));
+      this.placesSearched.set(true);
+      this.renderPlaceMarkers();
+    }
+    catch (error) { this.placesError.set(error instanceof ApiError && error.status === 502 ? 'El servicio de búsqueda de lugares no está disponible por ahora. Inténtalo más tarde.' : this.errorMessage(error, 'No se pudieron cargar lugares cercanos.')); }
+    finally { this.loadingPlaces.set(false); }
+  }
+
+  private renderPlaceMarkers() {
+    if (!this.map) return;
+    this.placeMarkers.forEach(marker => marker.remove());
+    this.placeMarkers = this.nearbyPlaces().map(place => {
+      const marker = L.circleMarker([place.lat, place.lng], { radius: 7, color: '#fff', weight: 2, fillColor: '#687d67', fillOpacity: .95 }).addTo(this.map!);
+      marker.bindTooltip(this.escapeAttribute(place.name)); return marker;
+    });
+  }
+
+  focusPlace(place: NearbyPlace) { this.map?.setView([place.lat, place.lng], 16); }
+
+  private distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const radians = Math.PI / 180;
+    const dLat = (lat2 - lat1) * radians;
+    const dLng = (lng2 - lng1) * radians;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin(dLng / 2) ** 2;
+    return 6371000 * 2 * Math.asin(Math.sqrt(a));
   }
 
   async createMapRequest() {
